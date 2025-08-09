@@ -339,7 +339,10 @@
             $reason = Utility::sanitizeInput($reasonA);
             $lengthInMinutes = ($length / 60);
             $time_stamp_start = time();
-            $time_stamp_end = ($length < 0) ? -1 : (time() + $length);
+            $time_stamp_end = 0;
+            if($lengthInMinutes !== 0) {
+                $time_stamp_end = ($length < 0) ? -1 : (time() + $length);
+            }
 
             if ($length <= -1) {
                 $lengthInMinutes = 30;
@@ -498,8 +501,8 @@
     }
 
     function formatMethod(int $method) {
-    $methods = ["client_steamid", "client_name", "client_ip", "admin_name", "admin_steamid", "map"];
-    return $methods[$method-1];
+        $methods = ["client_steamid", "client_name", "client_ip", "admin_name", "admin_steamid", "map", "length"];
+        return $methods[$method-1];
     }
 
     function GetRowInfo($id, $result2 = null) {
@@ -520,8 +523,8 @@
         $map                = $result2['map'];
         $time_stamp_start   = $result2['time_stamp_start'];
         $time_stamp_end     = $result2['time_stamp_end'];
-        $isExpired          = ($result2['is_expired'] == 1) ? true : false;
-        $isRemoved          = ($result2['is_removed'] == 1) ? true : false; 
+        $isExpired          = ($result2['is_expired'] == 1);
+        $isRemoved          = ($result2['is_removed'] == 1); 
         $adminNameRemoved   = $result2['admin_name_removed'];
         $time_stamp_removed = $result2['time_stamp_removed'];
         $reason_removed     = $result2['reason_removed'];
@@ -529,11 +532,13 @@
         $adminName = $admin->GetAdminNameFromSteamID($adminSteamID);
 
         $length = $kban->formatLength(($time_stamp_end - $time_stamp_start));
-
+        $expiresOn = "";
         if ($time_stamp_end == 0) {
             $length = "Permanent";
+            $expiresOn = "Never";
         } else if ($time_stamp_end <= -1) {
             $length = "Session";
+            $expiresOn = "Temporary";
         }
 
         $status = "Kban Active";
@@ -605,7 +610,7 @@
         $startDate  = $date->format(DATE_TIME_FORMAT);
 
         $date->setTimestamp($time_stamp_end);
-        $endDate    = ($length === "Session") ? "Temporary" : $date->format(DATE_TIME_FORMAT);
+        $endDate    = ($expiresOn !== "") ? $expiresOn : $date->format(DATE_TIME_FORMAT);
 
         echo "<ul class='kban_details'>";
 
@@ -707,8 +712,10 @@
         
     }
 
-    function GetKbanLengths() {
-        echo "<select id='add-select' class='select add-select'>";
+    function GetKbanLengths($addTag = true) {
+        if($addTag == true) {
+            echo "<select id='add-select' class='select add-select'>";
+        }
         echo "<optgroup label='Minutes'>";
         for($second = 1; $second < 3600; $second++) {
             /* we want 10, 30, and 50 minutes */
@@ -779,13 +786,20 @@
         echo "</optgroup>";
         $admin = new Admin();
         $admin->UpdateAdminInfo($GLOBALS['steamID']);
-        if ($admin->DoesHaveFullAccess()) {
+        if ($addTag == false || $admin->DoesHaveFullAccess()) {
             echo "<optgroup label='Others'>";
             echo "<option value='0'>Permanent</option>";
+            if($addTag == false) {
+                echo "<option value='-1'>Session</option>";
+                echo "<option value='-2'>Custom (in Minutes)</option>";
+            }
+
             echo "</optgroup>";
         }
 
-        echo "</select>";
+        if($addTag == true) {
+            echo "</select>";
+        }
     }
 
     function GetKbanLengthTypes() {

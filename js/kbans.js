@@ -304,3 +304,7 @@ function showKbanWindowInfo(type, playerName = "", playerSteamID = "", reason = 
 function CloseWindow() {
     $('.kban-action-window').css('display', 'none');
 }
+
+function GoHome() {
+    window.location.href = 'index.php?all';
+}

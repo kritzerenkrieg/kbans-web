@@ -27,8 +27,10 @@
         $pageType = "expired";
     }
 
-    if(isset($_GET['s'])) {
+    if(isset($_GET['s']) || isset($_GET['m'])) {
         $input = $_GET['s'];
+        $queryComplete = "LIKE '%$input%'";
+
         $method = formatMethod(intval($_GET['m']));
         if($method == "client_steamid" || $method == "admin_steamid") {
             if(!str_contains($input, "STEAMID")) {
@@ -46,6 +48,27 @@
             } else {
                 error_log("Error converting SteamID: " . $result['error']);
             }
+        } else if($method == "length" && isset($_GET['length'])) {
+            $lengthArray = $_GET['length'];
+            $lengthOperatorVal = intval($lengthArray[0]); // like greater or less or shit like this
+            $lengthOperator = "=";
+
+            if($lengthOperatorVal == 2) {$lengthOperator = ">";}
+            if($lengthOperatorVal == 3) {$lengthOperator = "<";}
+            if($lengthOperatorVal == 4) {$lengthOperator = ">=";}
+            if($lengthOperatorVal == 5) {$lengthOperator = "<=";}
+
+            $length;
+            if(isset($_GET['custom']) && $lengthArray[1] == -2) {
+                $length = intval($_GET['custom']); // in minutes
+            } else {
+                $length = $lengthArray[1];
+                if($length != -1) {
+                    $length = $length / 60; // we need to get length in minutes
+                }
+            }
+
+            $queryComplete = $lengthOperator . " " . $length;
         }
 
         if(str_contains($sql, "WHERE")) {
@@ -54,7 +77,7 @@
             $sql .= " WHERE ";
         }
 
-        $sql .= " `$method` LIKE '%$input%' ";
+        $sql .= " `$method` $queryComplete ";
     }
     
     $sql_query = $GLOBALS['DB']->query($sql);
@@ -168,95 +191,99 @@
                                     $kban = new Kban();
                                     $admin = new Admin();
                                     $dateA = new DateTime("now", new DateTimeZone(DATE_TIME_ZONE));
-                                    foreach($results1 as $result1) {
-                                        $id                 = $result1['id'];
-                                        $clientName         = $result1['client_name'];
-                                        $clientSteamID      = $result1['client_steamid'];
-                                        $clientIP           = $result1['client_ip'];
-                                        $adminSteamID       = $result1['admin_steamid'];
-                                        $reason             = $result1['reason'];
-                                        $time_stamp_start   = $result1['time_stamp_start'];
-                                        $time_stamp_end     = $result1['time_stamp_end'];
-                                        $isExpired          = ($result1['is_expired'] == 1) ? true : false;
-                                        $isRemoved          = ($result1['is_removed'] == 1) ? true : false; 
-                                        $map                = $result1['map'];
-                                        
-                                        $adminName = $admin->GetAdminNameFromSteamID($adminSteamID);
+                                    if($resultsCount == 0) {
+                                        echo "<tr><td colspan='16'><p style='color: red; font-size: 15px; font-weight: bold; text-align: center;'><i class='fa-solid fa-x'></i> No Kban was found!</p></tr>";
+                                    } else {
+                                        foreach($results1 as $result1) {
+                                            $id                 = $result1['id'];
+                                            $clientName         = $result1['client_name'];
+                                            $clientSteamID      = $result1['client_steamid'];
+                                            $clientIP           = $result1['client_ip'];
+                                            $adminSteamID       = $result1['admin_steamid'];
+                                            $reason             = $result1['reason'];
+                                            $time_stamp_start   = $result1['time_stamp_start'];
+                                            $time_stamp_end     = $result1['time_stamp_end'];
+                                            $isExpired          = ($result1['is_expired'] == 1) ? true : false;
+                                            $isRemoved          = ($result1['is_removed'] == 1) ? true : false; 
+                                            $map                = $result1['map'];
+                                            
+                                            $adminName = $admin->GetAdminNameFromSteamID($adminSteamID);
 
-                                        $length = $kban->formatLength(($time_stamp_end - $time_stamp_start));
-                                        if($time_stamp_end == 0) {
-                                            $length = "Permanent";
-                                        } else if($time_stamp_end <= -1) {
-                                            $length = "Session";
-                                        }
-
-                                        if(($isExpired == true && $isRemoved == false) || ($time_stamp_end > 1 && time() > $time_stamp_end && $isRemoved == false)) {
-                                            $length .= ' (Expired)';
-                                            if(isset($_GET['active'])) {
-                                                continue;
+                                            $length = $kban->formatLength(($time_stamp_end - $time_stamp_start));
+                                            if($time_stamp_end == 0) {
+                                                $length = "Permanent";
+                                            } else if($time_stamp_end <= -1) {
+                                                $length = "Session";
                                             }
-                                        }
 
-                                        if($isRemoved == true) {
-                                            $length .= ' (Removed)';
-                                        }
+                                            if(($isExpired == true && $isRemoved == false) || ($time_stamp_end > 1 && time() > $time_stamp_end && $isRemoved == false)) {
+                                                $length .= ' (Expired)';
+                                                if(isset($_GET['active'])) {
+                                                    continue;
+                                                }
+                                            }
 
-                                        $class = "row-expired";
-                                        if(!$isExpired && !$isRemoved) {
-                                            $class = "row-active";
-                                        }
+                                            if($isRemoved == true) {
+                                                $length .= ' (Removed)';
+                                            }
 
-                                        if($length == 0 || $time_stamp_end == 0) { // permanent ban
-                                            $class = "row-permanent";
-                                        }
-
-                                        if($isRemoved || ($time_stamp_end > 1 && time() > $time_stamp_end)) {
                                             $class = "row-expired";
-                                        }
-
-                                        $count = 0;
-                                        $realcount = 0;
-                                        if($clientSteamID == "NO STEAMID") {
-                                            $count = $kban->GetKbansNumber("", $clientIP);
-                                            $realcount = $kban->GetRealKbansNumber($clientIP);
-                                        } else {
-                                            $count = $kban->GetKbansNumber($clientSteamID);
-                                            $realcount = $kban->GetRealKbansNumber($clientSteamID);
-                                        }
-
-                                        $dateA->setTimestamp($time_stamp_start);
-                                        $dateB = $dateA->format(DATE_TIME_FORMAT);
-
-                                        echo "<tr class='$class' id-data='$id' id='diva-tr-$id'>";
-                                        if ($map != "Web Ban" && $map != "From Web") {
-                                            echo "<td style='background-color: transparent; align-items: center;'><img src='./images/games/csource.png' border='0' align='absmiddle' alt='css'></td>";
-                                        } else {
-                                            echo "<td style='background-color: transparent; align-items: center;'><img src='./images/games/web.png' border='0' align='absmiddle' alt='Web Ban'></td>";
-                                        }
-                                        echo "<td>$dateB</td>";
-                                        echo "<td>$clientName</td>";
-                                        if($count >= 2) {
-                                            if ($count == $realcount) {
-                                                echo "<td style='color: var(--theme-text); padding: 0;' class='count' id='$id-count' count='$count' steamid='$clientSteamID'><i class='fa-solid fa-ban'></i> <b>$realcount</b></td>";
-                                            } else {
-                                                echo "<td style='color: var(--theme-text); padding: 0;' class='count' id='$id-count' count='$count' steamid='$clientSteamID'><i class='fa-solid fa-ban'></i> <b>$realcount</b> ($count)</td>";
+                                            if(!$isExpired && !$isRemoved) {
+                                                $class = "row-active";
                                             }
-                                        } else {
-                                            echo "<td></td>";
-                                        }
-                                        echo "<td>$reason</td>";
-                                        echo "<td>$adminName</td>";
-                                        echo "<td class='row-length' id='length-$id'>$length</td>";
-                                    
-                                        echo "</tr>";
 
-                                        echo "<tr id='diva-$id-tr' style='display: none; width: 100%; height: 100%;'>";
-                                        echo "<td colspan='15'>";
-                                        echo "<div id='diva-$id' class='row-block' is_slided='0'>";
-                                        GetRowInfo(0, $result1);
-                                        echo "</div>";
-                                        echo "</td>";
-                                        echo "</tr>";
+                                            if($length == 0 || $time_stamp_end == 0) { // permanent ban
+                                                $class = "row-permanent";
+                                            }
+
+                                            if($isRemoved || ($time_stamp_end > 1 && time() > $time_stamp_end)) {
+                                                $class = "row-expired";
+                                            }
+
+                                            $count = 0;
+                                            $realcount = 0;
+                                            if($clientSteamID == "NO STEAMID") {
+                                                $count = $kban->GetKbansNumber("", $clientIP);
+                                                $realcount = $kban->GetRealKbansNumber($clientIP);
+                                            } else {
+                                                $count = $kban->GetKbansNumber($clientSteamID);
+                                                $realcount = $kban->GetRealKbansNumber($clientSteamID);
+                                            }
+
+                                            $dateA->setTimestamp($time_stamp_start);
+                                            $dateB = $dateA->format(DATE_TIME_FORMAT);
+
+                                            echo "<tr class='$class' id-data='$id' id='diva-tr-$id'>";
+                                            if ($map != "Web Ban" && $map != "From Web") {
+                                                echo "<td style='background-color: transparent; align-items: center;'><img src='./images/games/csource.png' border='0' align='absmiddle' alt='css'></td>";
+                                            } else {
+                                                echo "<td style='background-color: transparent; align-items: center;'><img src='./images/games/web.png' border='0' align='absmiddle' alt='Web Ban'></td>";
+                                            }
+                                            echo "<td>$dateB</td>";
+                                            echo "<td>$clientName</td>";
+                                            if($count >= 2) {
+                                                if ($count == $realcount) {
+                                                    echo "<td style='color: var(--theme-text); padding: 0;' class='count' id='$id-count' count='$count' steamid='$clientSteamID'><i class='fa-solid fa-ban'></i> <b>$realcount</b></td>";
+                                                } else {
+                                                    echo "<td style='color: var(--theme-text); padding: 0;' class='count' id='$id-count' count='$count' steamid='$clientSteamID'><i class='fa-solid fa-ban'></i> <b>$realcount</b> ($count)</td>";
+                                                }
+                                            } else {
+                                                echo "<td></td>";
+                                            }
+                                            echo "<td>$reason</td>";
+                                            echo "<td>$adminName</td>";
+                                            echo "<td class='row-length' id='length-$id'>$length</td>";
+                                        
+                                            echo "</tr>";
+
+                                            echo "<tr id='diva-$id-tr' style='display: none; width: 100%; height: 100%;'>";
+                                            echo "<td colspan='15'>";
+                                            echo "<div id='diva-$id' class='row-block' is_slided='0'>";
+                                            GetRowInfo(0, $result1);
+                                            echo "</div>";
+                                            echo "</td>";
+                                            echo "</tr>";
+                                        }
                                     }
                                     ?>
                             </tbody>

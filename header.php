@@ -57,13 +57,13 @@
             </div>
             <form method="GET">
                 <input id='hideInput' type='text' style='display: none;' name='' value='true'>
-                <div class='input-group'>
+                <div class='input-group' id='search-input-div'>
                     <label for='s'>Input</label>
-                    <input class='input search-modal-input' type='text' name='s' required>
+                    <input class='input search-modal-input' type='text' name='s'>
                 </div>
                 <div class='input-group'>
                     <label for='m'>Method</label>
-                    <select name='m' class='select search-modal-input'>
+                    <select name='m' id='search-modal-select' class='select search-modal-input'>
                         <option value='1'>Player SteamID</option>
                         <option value='2'>Player Name</option>
                         <?php if(IsAdminLoggedIn() && $admin->DoesHaveFullAccess()) { ?>
@@ -73,9 +73,26 @@
                         <option value='5'>Admin SteamID</option>
                         <?php if(str_contains($_SERVER['REQUEST_URI'], 'logs') == false) { ?>
                             <option value='6'>Map</option>
+                            <option value="7">Length</option>
                         <?php } ?>
-                    </select>
-                </div>
+                        </select>
+                    </div>
+                    <div class="input-group" id="length-group" style="display: none;">
+                        <div class="input-group" style="display: flex !important; justify-content: center;">
+                            <select name="length[]" class="select" style="float: right; order: 1; width: 50% !important;">
+                                <option value="1">= (Equal to)</option>
+                                <option value="2">> (Greater)</option>
+                                <option value="3">< (Smaller)</option>
+                                <option value="4">>= (Greater or equal to)</option>
+                                <option value="5"><= (Smaller or equal to)</option>
+                            </select>
+                            &nbsp;&nbsp;&nbsp;
+                            <select name="length[]" id="length-select" class="select" style="order: 2; float: left; width: 80%; margin-left: 10px;">
+                                <?php GetKbanLengths(false); ?>
+                            </select>
+                            <input style="order: 3; width: 20%; display: none; margin-left: 10px;" type="number" class="input" name="custom" id="custom-input">
+                        </div>
+                    </div>
                 <button type='submit' class='button button-primary kban-form-button' style='width: 90%; margin-left: 5%;'><i class='fa-solid fa-magnifying-glass'></i> Search</button>
             </form>
         </div>
@@ -88,7 +105,7 @@
             ?>
                 <i class="fab fa-steam-symbol"></i>
             </a>
-            <a id="discord" target="_blank" href="https://discord.gg/XhByCBg" rel="noopener" data-ipstooltip="" _title="Join us on Discord">
+            <a id="discord" target="_blank" href="<?php echo $GLOBALS['DISCORD']; ?>" rel="noopener" data-ipstooltip="" _title="Join us on Discord">
                 <i class="fab fa-discord"></i>
             </a>
         </div>
@@ -139,3 +156,18 @@
             <?php } ?>
         </ul>
     </div>
+
+    <script>
+        $(function() {
+            $('#search-modal-select').on('change', ()=>{
+                let val = $('#search-modal-select').val();
+                $('#length-group').css('display', (val == 7)?"block":"none");
+                $('#search-input-div').css('display', (val == 7)?"none":"block");
+            });
+
+            $('#length-select').on('change', ()=>{
+                let val = $('#length-select').val();
+                $('#custom-input').css('display', (val == -2)?"block":"none");
+            });
+        });
+    </script>
