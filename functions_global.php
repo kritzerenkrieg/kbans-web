@@ -298,11 +298,12 @@
         }
 
         public function getKbanInfoFromID($id) {
-            $sql = "SELECT * FROM `KbRestrict_CurrentBans` WHERE `id`='$id'";
-            $query = $GLOBALS['DB']->query($sql);
-
-            $results = $query->fetch_all(MYSQLI_ASSOC);
-            $query->free();
+            $sql = "SELECT * FROM `KbRestrict_CurrentBans` WHERE `id`=?";
+            $stmt = $GLOBALS['DB']->prepare($sql);
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+            $results = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
 
             foreach($results as $result) {
                 return $result;
@@ -312,10 +313,14 @@
         public function GetKbansNumber($steamID, $IP = "") {
             $search = (empty($steamID)) ? $IP : $steamID;
             $searchMethod = (empty($steamID)) ? "client_ip" : "client_steamid";
-            
-            $queryA = $GLOBALS['DB']->query("SELECT * FROM `KbRestrict_CurrentBans` WHERE `$searchMethod`='$search'");
-            $rows = $queryA->num_rows;
-            $queryA->free();
+
+            $sql = "SELECT COUNT(*) AS total FROM `KbRestrict_CurrentBans` WHERE `$searchMethod`=?";
+            $stmt = $GLOBALS['DB']->prepare($sql);
+            $stmt->bind_param("s", $search);
+            $stmt->execute();
+            $result = $stmt->get_result()->fetch_assoc();
+            $rows = intval($result['total']);
+            $stmt->close();
             return $rows;
         }
         
@@ -323,9 +328,13 @@
             $search = (empty($steamID)) ? $IP : $steamID;
             $searchMethod = (empty($steamID)) ? "client_ip" : "client_steamid";
 
-            $queryA = $GLOBALS['DB']->query("SELECT * FROM `KbRestrict_CurrentBans` WHERE `$searchMethod`='$search' AND `is_removed`=0");
-            $rows = $queryA->num_rows;
-            $queryA->free();
+            $sql = "SELECT COUNT(*) AS total FROM `KbRestrict_CurrentBans` WHERE `$searchMethod`=? AND `is_removed`=0";
+            $stmt = $GLOBALS['DB']->prepare($sql);
+            $stmt->bind_param("s", $search);
+            $stmt->execute();
+            $result = $stmt->get_result()->fetch_assoc();
+            $rows = intval($result['total']);
+            $stmt->close();
             return $rows;
         }
 
@@ -465,9 +474,12 @@
         }
 
         public function IsSteamIDAlreadyBanned($steamID) {
-            $query = $GLOBALS['DB']->query("SELECT * FROM `KbRestrict_CurrentBans` WHERE `client_steamid`='$steamID'");
-            $results = $query->fetch_all(MYSQLI_ASSOC);
-            $query->free();
+            $sql = "SELECT * FROM `KbRestrict_CurrentBans` WHERE `client_steamid`=?";
+            $stmt = $GLOBALS['DB']->prepare($sql);
+            $stmt->bind_param("s", $steamID);
+            $stmt->execute();
+            $results = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $stmt->close();
 
             foreach ($results as $result) {
                 $isActive = ($result['is_expired'] == 0 && $result['is_removed'] == 0);
@@ -504,6 +516,19 @@
         $methods = ["client_steamid", "client_name", "client_ip", "admin_name", "admin_steamid", "map", "length", "all_search"];
         $index = $method - 1;
         return $methods[$index] ?? "client_steamid";
+    }
+
+    function DbBindParams(mysqli_stmt $stmt, string $types, array &$params) {
+        if ($types === '' || empty($params)) {
+            return;
+        }
+
+        $bindArgs = [$types];
+        foreach ($params as $key => &$value) {
+            $bindArgs[] = &$value;
+        }
+
+        call_user_func_array([$stmt, 'bind_param'], $bindArgs);
     }
 
     function GetRowInfo($id, $result2 = null) {

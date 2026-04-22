@@ -15,39 +15,57 @@
     $resultsPerPage = 20;
     $resultsStart = (($currentPage - 1) * $resultsPerPage);
 
-    $sql = "SELECT * FROM `KbRestrict_CurrentBans`";
+    $fromSql = " FROM `KbRestrict_CurrentBans`";
+    $whereClauses = [];
+    $paramTypes = "";
+    $paramValues = [];
+    $addParam = function(string $type, $value) use (&$paramTypes, &$paramValues) {
+        $paramTypes .= $type;
+        $paramValues[] = $value;
+    };
+
     $pageType = "all";
 	$currentTime = time();
     if(isset($_GET['active'])) {
 		$currentTime = time();
-        $sql .= " WHERE `is_removed`=0 AND `is_expired`=0 AND (time_stamp_end = 0 OR time_stamp_end > $currentTime)";
+        $whereClauses[] = "`is_removed`=0 AND `is_expired`=0 AND (time_stamp_end = 0 OR time_stamp_end > ?)";
+        $addParam("i", $currentTime);
         $pageType = "active";
     } else if(isset($_GET['expired'])) {
-        $sql .= " WHERE (`is_expired`=1 OR (time_stamp_end > 1 AND time_stamp_end <= " . $currentTime . "))";
+        $whereClauses[] = "(`is_expired`=1 OR (time_stamp_end > 1 AND time_stamp_end <= ?))";
+        $addParam("i", $currentTime);
         $pageType = "expired";
     }
 
     if(isset($_GET['s']) || isset($_GET['m'])) {
-        $input = $_GET['s'];
+        $input = isset($_GET['s']) ? trim((string)$_GET['s']) : "";
         $rawInput = $input;
-        $queryComplete = "LIKE '%$input%'";
         $searchCondition = "";
+        $searchParams = [];
+        $searchTypes = "";
+        $addSearchParam = function(string $type, $value) use (&$searchTypes, &$searchParams) {
+            $searchTypes .= $type;
+            $searchParams[] = $value;
+        };
 
-        $method = formatMethod(intval($_GET['m']));
+        $method = formatMethod(intval($_GET['m'] ?? 1));
         if($method == "client_steamid" || $method == "admin_steamid" || $method == "all_search") {
             $input = Steam::ExtractSteamIDFromText($input);
 
             $steam = new Steam();
             $result = $steam->verifyAndConvertSteamID($input);
 
-            $isQuickSearch = ($method == "all_search");
+            $isAllSearch = ($method == "all_search");
 
             if ($result['success']) {
                 $convertedSteamID = $result['steamID2'];
                 $input = $convertedSteamID;
 
-                if($isQuickSearch) {
-                    $searchCondition = " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_steamid`) LIKE LOWER('%$input%')) ";
+                if($isAllSearch) {
+                    $searchCondition = "(LOWER(`client_steamid`) LIKE LOWER(?) OR LOWER(`admin_steamid`) LIKE LOWER(?))";
+                    $likeInput = "%$input%";
+                    $addSearchParam("s", $likeInput);
+                    $addSearchParam("s", $likeInput);
                 }
             } else {
                 error_log("Error converting SteamID: " . $result['error']);
@@ -55,18 +73,33 @@
                 // If input is not a SteamID, allow matching related name fields.
                 if($method == "client_steamid") {
                     $input = $rawInput;
+                    $likeInput = "%$input%";
 
-                    if($isQuickSearch) {
-                        $searchCondition = " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`client_name`) LIKE LOWER('%$input%') OR LOWER(`admin_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_name`) LIKE LOWER('%$input%')) ";
+                    if($isAllSearch) {
+                        $searchCondition = "(LOWER(`client_steamid`) LIKE LOWER(?) OR LOWER(`client_name`) LIKE LOWER(?) OR LOWER(`admin_steamid`) LIKE LOWER(?) OR LOWER(`admin_name`) LIKE LOWER(?))";
+                        $addSearchParam("s", $likeInput);
+                        $addSearchParam("s", $likeInput);
+                        $addSearchParam("s", $likeInput);
+                        $addSearchParam("s", $likeInput);
                     } else {
-                        $searchCondition = " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`client_name`) LIKE LOWER('%$input%')) ";
+                        $searchCondition = "(LOWER(`client_steamid`) LIKE LOWER(?) OR LOWER(`client_name`) LIKE LOWER(?))";
+                        $addSearchParam("s", $likeInput);
+                        $addSearchParam("s", $likeInput);
                     }
                 } else if($method == "admin_steamid") {
                     $input = $rawInput;
-                    $searchCondition = " (LOWER(`admin_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_name`) LIKE LOWER('%$input%')) ";
-                } else if($isQuickSearch) {
+                    $likeInput = "%$input%";
+                    $searchCondition = "(LOWER(`admin_steamid`) LIKE LOWER(?) OR LOWER(`admin_name`) LIKE LOWER(?))";
+                    $addSearchParam("s", $likeInput);
+                    $addSearchParam("s", $likeInput);
+                } else if($isAllSearch) {
                     $input = $rawInput;
-                    $searchCondition = " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`client_name`) LIKE LOWER('%$input%') OR LOWER(`admin_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_name`) LIKE LOWER('%$input%')) ";
+                    $likeInput = "%$input%";
+                    $searchCondition = "(LOWER(`client_steamid`) LIKE LOWER(?) OR LOWER(`client_name`) LIKE LOWER(?) OR LOWER(`admin_steamid`) LIKE LOWER(?) OR LOWER(`admin_name`) LIKE LOWER(?))";
+                    $addSearchParam("s", $likeInput);
+                    $addSearchParam("s", $likeInput);
+                    $addSearchParam("s", $likeInput);
+                    $addSearchParam("s", $likeInput);
                 }
             }
         } else if($method == "length" && isset($_GET['length'])) {
@@ -89,33 +122,43 @@
                 }
             }
 
-            $queryComplete = $lengthOperator . " " . $length;
-        }
-
-        if(str_contains($sql, "WHERE")) {
-            $sql .= " AND ";
-        } else {
-            $sql .= " WHERE ";
+            $searchCondition = "`$method` $lengthOperator ?";
+            $addSearchParam("i", intval($length));
         }
 
         if($searchCondition !== "") {
-            $sql .= $searchCondition;
+            $whereClauses[] = $searchCondition;
+            foreach($searchParams as $searchParam) {
+                $paramValues[] = $searchParam;
+            }
+            $paramTypes .= $searchTypes;
         } else {
-            if($method == "length") {
-                $sql .= " `$method` $queryComplete ";
-            } else if($method == "all_search") {
-                $sql .= " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`client_name`) LIKE LOWER('%$input%') OR LOWER(`admin_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_name`) LIKE LOWER('%$input%')) ";
+            if($method == "all_search") {
+                $whereClauses[] = "(LOWER(`client_steamid`) LIKE LOWER(?) OR LOWER(`client_name`) LIKE LOWER(?) OR LOWER(`admin_steamid`) LIKE LOWER(?) OR LOWER(`admin_name`) LIKE LOWER(?))";
+                $likeInput = "%$input%";
+                $addParam("s", $likeInput);
+                $addParam("s", $likeInput);
+                $addParam("s", $likeInput);
+                $addParam("s", $likeInput);
             } else {
-                $sql .= " LOWER(`$method`) LIKE LOWER('%$input%') ";
+                $whereClauses[] = "LOWER(`$method`) LIKE LOWER(?)";
+                $addParam("s", "%$input%");
             }
         }
     }
-    
-    $sql_query = $GLOBALS['DB']->query($sql);
-    $resultsCount = $sql_query->num_rows;
+
+    $whereSql = empty($whereClauses) ? "" : " WHERE " . implode(" AND ", $whereClauses);
+
+    $countSql = "SELECT COUNT(*) AS total" . $fromSql . $whereSql;
+    $countStmt = $GLOBALS['DB']->prepare($countSql);
+    DbBindParams($countStmt, $paramTypes, $paramValues);
+    $countStmt->execute();
+    $countResult = $countStmt->get_result()->fetch_assoc();
+    $resultsCount = intval($countResult['total']);
+    $countStmt->close();
+
     $totalPages = ceil(($resultsCount / $resultsPerPage));
 
-    $sql_query->free();
     if($totalPages != 0 && $currentPage > $totalPages) {
         $currentPage = $totalPages;
     }
@@ -142,10 +185,19 @@
 <!DOCTYPE html>
 <html lang="en">
     <?php
-        $query = $GLOBALS['DB']->query($sql . "ORDER BY time_stamp_start DESC LIMIT $resultsStart, $resultsPerPage");
+        $dataSql = "SELECT *" . $fromSql . $whereSql . " ORDER BY time_stamp_start DESC LIMIT ?, ?";
+        $dataTypes = $paramTypes . "ii";
+        $dataParams = $paramValues;
+        $dataParams[] = intval($resultsStart);
+        $dataParams[] = intval($resultsPerPage);
+
+        $dataStmt = $GLOBALS['DB']->prepare($dataSql);
+        DbBindParams($dataStmt, $dataTypes, $dataParams);
+        $dataStmt->execute();
+        $query = $dataStmt->get_result();
         $results1 = $query->fetch_all(MYSQLI_ASSOC);
         $resultsRealCount = $query->num_rows;
-        $query->free();
+        $dataStmt->close();
 
         $url = $_SERVER['REQUEST_URI'];
         if(str_contains($url, '&page')) {

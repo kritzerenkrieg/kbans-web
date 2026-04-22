@@ -43,20 +43,37 @@
     $resultsPerPage = 20;
     $resultsStart = (($currentPage - 1) * $resultsPerPage);
 
-    $sql = "SELECT * FROM ";
-    $sql .= ($isWeb) ? "`KbRestrict_weblogs`" : "`KbRestrict_srvlogs`";
+    $fromSql = " FROM ";
+    $fromSql .= ($isWeb) ? "`KbRestrict_weblogs`" : "`KbRestrict_srvlogs`";
+    $whereClauses = [];
+    $paramTypes = "";
+    $paramValues = [];
 
     if(isset($_GET['s'])) {
-        $input = $_GET['s'];
-        $method = formatMethod(intval($_GET['m']));
-        $sql .= " WHERE LOWER(`$method`) LIKE LOWER('%$input%')";
+        $input = trim((string)$_GET['s']);
+        $method = formatMethod(intval($_GET['m'] ?? 1));
+        $allowedMethods = ["client_steamid", "client_name", "admin_name", "admin_steamid"];
+        if(!in_array($method, $allowedMethods, true)) {
+            $method = "client_name";
+        }
+
+        $whereClauses[] = "LOWER(`$method`) LIKE LOWER(?)";
+        $paramTypes .= "s";
+        $paramValues[] = "%$input%";
     }
 
-    $sql_query = $GLOBALS['DB']->query($sql);
-    $resultsCount = $sql_query->num_rows;
+    $whereSql = empty($whereClauses) ? "" : " WHERE " . implode(" AND ", $whereClauses);
+
+    $countSql = "SELECT COUNT(*) AS total" . $fromSql . $whereSql;
+    $countStmt = $GLOBALS['DB']->prepare($countSql);
+    DbBindParams($countStmt, $paramTypes, $paramValues);
+    $countStmt->execute();
+    $countResult = $countStmt->get_result()->fetch_assoc();
+    $resultsCount = intval($countResult['total']);
+    $countStmt->close();
+
     $totalPages = ceil(($resultsCount / $resultsPerPage));
 
-    $sql_query->free();
     if($totalPages != 0 && $currentPage > $totalPages) {
         $currentPage = $totalPages;
     }
@@ -69,10 +86,19 @@
 <!DOCTYPE html>
 <html>
     <?php
-    $query = $GLOBALS['DB']->query($sql . "ORDER BY time_stamp DESC LIMIT $resultsStart, $resultsPerPage");
+    $dataSql = "SELECT *" . $fromSql . $whereSql . " ORDER BY time_stamp DESC LIMIT ?, ?";
+    $dataTypes = $paramTypes . "ii";
+    $dataParams = $paramValues;
+    $dataParams[] = intval($resultsStart);
+    $dataParams[] = intval($resultsPerPage);
+
+    $dataStmt = $GLOBALS['DB']->prepare($dataSql);
+    DbBindParams($dataStmt, $dataTypes, $dataParams);
+    $dataStmt->execute();
+    $query = $dataStmt->get_result();
     $results1 = $query->fetch_all(MYSQLI_ASSOC);
     $resultsRealCount = $query->num_rows;
-    $query->free();
+    $dataStmt->close();
 
     $url = $_SERVER['REQUEST_URI'];
     if(str_contains($url, '&page')) {
