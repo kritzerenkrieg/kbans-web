@@ -501,8 +501,9 @@
     }
 
     function formatMethod(int $method) {
-        $methods = ["client_steamid", "client_name", "client_ip", "admin_name", "admin_steamid", "map", "length"];
-        return $methods[$method-1];
+        $methods = ["client_steamid", "client_name", "client_ip", "admin_name", "admin_steamid", "map", "length", "all_search"];
+        $index = $method - 1;
+        return $methods[$index] ?? "client_steamid";
     }
 
     function GetRowInfo($id, $result2 = null) {

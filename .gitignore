@@ -24,6 +24,9 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# How was this not in the original .gitignore? I have no idea.
+config.php
+
 ##### Linux
 *~
 

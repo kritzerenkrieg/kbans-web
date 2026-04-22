@@ -49,7 +49,7 @@
     if(isset($_GET['s'])) {
         $input = $_GET['s'];
         $method = formatMethod(intval($_GET['m']));
-        $sql .= " WHERE `$method` LIKE '%$input%'";
+        $sql .= " WHERE LOWER(`$method`) LIKE LOWER('%$input%')";
     }
 
     $sql_query = $GLOBALS['DB']->query($sql);

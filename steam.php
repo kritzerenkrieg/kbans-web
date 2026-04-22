@@ -2,16 +2,39 @@
 
 class Steam
 {
+	public static function ExtractSteamIDFromText($input)
+	{
+		$steamInput = trim((string)$input);
+		#these patterns will match the most common SteamID formats. Validation is done in the convertSteamID function.
+		if ($steamInput === '') {
+			return '';
+		}
+
+		$patterns = [
+			'/STEAM_[0-5]:[0-1]:\d+/i',
+			'/\[U:1:\d+\]/i',
+			'/U:1:\d+/i',
+			'/7656119\d{10}/'
+		];
+
+		foreach ($patterns as $pattern) {
+			if (preg_match($pattern, $steamInput, $match)) {
+				return strtoupper($match[0]);
+			}
+		}
+
+		return $steamInput;
+	}
 	private static function resolveInputID($steamid)
 	{
 		switch (true) {
-			case preg_match("/STEAM_[0|1]:[0:1]:\d*/", $steamid):
+			case preg_match('/^STEAM_[0-5]:[0-1]:\d+$/i', $steamid):
 				return 'Steam2';
-			case preg_match("/\[U:1:\d*\]/", $steamid):
+			case preg_match('/^\[U:1:\d+\]$/i', $steamid):
 				return 'Steam3';
-			case preg_match("/U:1:\d*/", $steamid):
+			case preg_match('/^U:1:\d+$/i', $steamid):
 				return 'Steam3';
-			case preg_match("/\d{17}/", $steamid):
+			case preg_match('/^7656119\d{10}$/', $steamid):
 				return 'Steam64';
 			default:
 				throw new Exception("Invalid SteamID input!");

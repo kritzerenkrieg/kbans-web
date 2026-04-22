@@ -130,8 +130,8 @@
         <div class="search_input">
             <form method="GET" action="index.php">
                 <input type='text' style='display: none;' name='all' value='true'>
-                <input type="text" class="input input-header-search" placeholder="Search SteamID..." name='s' required>
-                <input type='text' style='display: none;' name='m' value='1'>
+                <input type="text" class="input input-header-search" placeholder="Search KBans..." name='s' required>
+                <input type='text' style='display: none;' name='m' value='8'>
                 <button id="search_icon"><i class="fa-solid fa-magnifying-glass"></i></button>
             </form>
         </div>

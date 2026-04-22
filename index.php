@@ -29,24 +29,45 @@
 
     if(isset($_GET['s']) || isset($_GET['m'])) {
         $input = $_GET['s'];
+        $rawInput = $input;
         $queryComplete = "LIKE '%$input%'";
+        $searchCondition = "";
 
         $method = formatMethod(intval($_GET['m']));
-        if($method == "client_steamid" || $method == "admin_steamid") {
-            if(!str_contains($input, "STEAMID")) {
-                if(str_contains($input, " ")) {
-                    $input = str_replace(" ", "", $input);
-                }
-            }
+        if($method == "client_steamid" || $method == "admin_steamid" || $method == "all_search") {
+            $input = Steam::ExtractSteamIDFromText($input);
 
             $steam = new Steam();
             $result = $steam->verifyAndConvertSteamID($input);
 
+            $isQuickSearch = ($method == "all_search");
+
             if ($result['success']) {
                 $convertedSteamID = $result['steamID2'];
                 $input = $convertedSteamID;
+
+                if($isQuickSearch) {
+                    $searchCondition = " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_steamid`) LIKE LOWER('%$input%')) ";
+                }
             } else {
                 error_log("Error converting SteamID: " . $result['error']);
+
+                // If input is not a SteamID, allow matching related name fields.
+                if($method == "client_steamid") {
+                    $input = $rawInput;
+
+                    if($isQuickSearch) {
+                        $searchCondition = " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`client_name`) LIKE LOWER('%$input%') OR LOWER(`admin_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_name`) LIKE LOWER('%$input%')) ";
+                    } else {
+                        $searchCondition = " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`client_name`) LIKE LOWER('%$input%')) ";
+                    }
+                } else if($method == "admin_steamid") {
+                    $input = $rawInput;
+                    $searchCondition = " (LOWER(`admin_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_name`) LIKE LOWER('%$input%')) ";
+                } else if($isQuickSearch) {
+                    $input = $rawInput;
+                    $searchCondition = " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`client_name`) LIKE LOWER('%$input%') OR LOWER(`admin_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_name`) LIKE LOWER('%$input%')) ";
+                }
             }
         } else if($method == "length" && isset($_GET['length'])) {
             $lengthArray = $_GET['length'];
@@ -77,7 +98,17 @@
             $sql .= " WHERE ";
         }
 
-        $sql .= " `$method` $queryComplete ";
+        if($searchCondition !== "") {
+            $sql .= $searchCondition;
+        } else {
+            if($method == "length") {
+                $sql .= " `$method` $queryComplete ";
+            } else if($method == "all_search") {
+                $sql .= " (LOWER(`client_steamid`) LIKE LOWER('%$input%') OR LOWER(`client_name`) LIKE LOWER('%$input%') OR LOWER(`admin_steamid`) LIKE LOWER('%$input%') OR LOWER(`admin_name`) LIKE LOWER('%$input%')) ";
+            } else {
+                $sql .= " LOWER(`$method`) LIKE LOWER('%$input%') ";
+            }
+        }
     }
     
     $sql_query = $GLOBALS['DB']->query($sql);
