@@ -74,18 +74,9 @@
                 if($method == "client_steamid") {
                     $input = $rawInput;
                     $likeInput = "%$input%";
-
-                    if($isAllSearch) {
-                        $searchCondition = "(LOWER(`client_steamid`) LIKE LOWER(?) OR LOWER(`client_name`) LIKE LOWER(?) OR LOWER(`admin_steamid`) LIKE LOWER(?) OR LOWER(`admin_name`) LIKE LOWER(?))";
-                        $addSearchParam("s", $likeInput);
-                        $addSearchParam("s", $likeInput);
-                        $addSearchParam("s", $likeInput);
-                        $addSearchParam("s", $likeInput);
-                    } else {
-                        $searchCondition = "(LOWER(`client_steamid`) LIKE LOWER(?) OR LOWER(`client_name`) LIKE LOWER(?))";
-                        $addSearchParam("s", $likeInput);
-                        $addSearchParam("s", $likeInput);
-                    }
+                    $searchCondition = "(LOWER(`client_steamid`) LIKE LOWER(?) OR LOWER(`client_name`) LIKE LOWER(?))";
+                    $addSearchParam("s", $likeInput);
+                    $addSearchParam("s", $likeInput);
                 } else if($method == "admin_steamid") {
                     $input = $rawInput;
                     $likeInput = "%$input%";
